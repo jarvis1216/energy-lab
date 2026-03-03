@@ -1217,31 +1217,29 @@ function fallbackCopy(text, btn, onSuccess) {
 async function saveRecord() {
   if (!db) return; // 未配置 Supabase 时静默跳过
   try {
-    const r       = RESULTS[S.topDim];
-    const vals    = getRadarValues();   // 雷达图五维能量值（已在 calcDimensions 后可用）
+    const r    = RESULTS[S.topDim];
+    const vals = getRadarValues();   // 雷达图五维能量值（已在 calcDimensions 后可用）
+
+    // 与 Supabase 表 energy_lab_records 字段名完全一致
+    const payload = {
+      gender:           S.gender,
+      birth_date:       `${S.birthYear}-${String(S.birthMonth).padStart(2,'0')}-${String(S.birthDay).padStart(2,'0')}`,
+      birth_time:       S.birthShichen !== null ? SHICHEN_CHARS[S.birthShichen] : null,
+
+      career_score:     vals[0],   // 事业气场
+      emotion_score:    vals[1],   // 情绪韧性
+      social_score:     vals[2],   // 人际磁场
+      wealth_score:     vals[3],   // 财运承载
+      action_score:     vals[4],   // 行动能量
+
+      conclusion_title: r.title,
+      conclusion_desc:  r.mfc,
+      formula:          r.plan.scent.formula,
+    };
 
     const { data, error } = await db
       .from('energy_lab_records')
-      .insert({
-        gender:        S.gender,
-        birth_year:    S.birthYear,
-        birth_month:   S.birthMonth,
-        birth_day:     S.birthDay,
-        birth_shichen: S.birthShichen,
-        age:           S.age,
-
-        dim_career:    vals[0],   // 事业气场
-        dim_emotion:   vals[1],   // 情绪韧性
-        dim_social:    vals[2],   // 人际磁场
-        dim_wealth:    vals[3],   // 财运承载
-        dim_action:    vals[4],   // 行动能量
-
-        top_dim:       S.topDim,
-        verdict_badge: r.badge,
-        verdict_title: r.title,
-        formula:       r.plan.scent.formula,
-        is_converted:  false,
-      })
+      .insert(payload)
       .select('id')
       .single();
 
