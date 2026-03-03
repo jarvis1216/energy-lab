@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>药珠实验室 · 能量感知校准</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="lib/supabase.js"></script>
+  <style>
+    :root {
+      --bg: #F9F8F4;
+      --ink: #2D2D2D;
+      --muted: #8A8680;
+      --border: #DDD9D0;
+      --accent: #8B6F47;
+      --accent-light: #F0EAE0;
+      --accent-mid: #C8A97A;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      background: var(--bg); color: var(--ink);
+      font-family: 'Songti SC', 'STSong', 'SimSun', serif;
+      min-height: 100vh; padding: 20px 14px 48px;
+      display: flex; justify-content: center;
+    }
+    #app { width: 100%; max-width: 480px; }
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* ── Card ── */
+    .card {
+      border: 1px solid var(--border); background: #FDFCF9;
+      padding: 26px 18px; position: relative;
+    }
+    @media (min-width: 420px) { .card { padding: 36px 32px; } }
+    .card::before {
+      content: ''; position: absolute; inset: 5px;
+      border: 1px solid #EDE9E1; pointer-events: none;
+    }
+
+    /* ── Type helpers ── */
+    .header-label { font-size: 10px; letter-spacing: .3em; color: var(--muted); text-align: center; margin-bottom: 18px; }
+    .deco-line { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; letter-spacing: .18em; }
+    .deco-line::before, .deco-line::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Step track ── */
+    .step-track { display: flex; align-items: center; margin-bottom: 20px; }
+    .s-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background .4s; }
+    .s-dot.done { background: var(--accent); }
+    .s-dot.now  { background: var(--ink); }
+    .s-seg { flex: 1; height: 1px; background: var(--border); transition: background .4s; }
+    .s-seg.done { background: var(--accent); }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      background: var(--ink); color: var(--bg); border: none; padding: 14px 20px;
+      font-family: inherit; font-size: 13px; letter-spacing: .1em;
+      cursor: pointer; transition: background .2s; width: 100%; display: block; text-align: center;
+    }
+    .btn-primary:hover { background: #3d3d3d; }
+    .btn-outline {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+      padding: 12px 20px; font-family: inherit; font-size: 12px; letter-spacing: .1em;
+      cursor: pointer; transition: all .2s; width: 100%; display: block; text-align: center; margin-top: 10px;
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-unlock {
+      background: linear-gradient(135deg, #8B6F47 0%, #C8A97A 100%);
+      color: white; border: none; padding: 16px 20px; font-family: inherit;
+      font-size: 14px; letter-spacing: .08em; cursor: pointer;
+      width: 100%; display: block; text-align: center; transition: opacity .2s;
+    }
+    .btn-unlock:hover { opacity: .9; }
+
+    /* ── Form ── */
+    .f-label { font-size: 10px; letter-spacing: .2em; color: var(--muted); margin-bottom: 7px; }
+    .f-input {
+      width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+      padding: 11px 13px; font-family: inherit; font-size: 14px; outline: none;
+      transition: border-color .2s; -webkit-appearance: none; appearance: none; border-radius: 0;
+    }
+    .f-input:focus { border-color: var(--accent); }
+    .f-select {
+      width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+      padding: 11px 13px; font-family: inherit; font-size: 14px; outline: none;
+      transition: border-color .2s; -webkit-appearance: none; appearance: none; border-radius: 0;
+      cursor: pointer;
+    }
+    .f-select:focus { border-color: var(--accent); }
+    .gender-btn {
+      flex: 1; padding: 13px 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--muted); font-family: inherit;
+      font-size: 14px; letter-spacing: .1em; cursor: pointer; transition: all .2s; text-align: center;
+    }
+    .gender-btn.sel { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 2px; background: var(--border); outline: none; border-radius: 0;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 1px 4px rgba(139,111,71,.3);
+    }
+
+    /* ── Advanced options toggle ── */
+    .adv-toggle {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      font-size: 11px; color: var(--muted); letter-spacing: .12em; margin-bottom: 12px;
+      user-select: none;
+    }
+    .adv-toggle::before { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .adv-toggle-arrow { font-size: 9px; transition: transform .2s; }
+    .adv-toggle-arrow.open { transform: rotate(180deg); }
+    .adv-body { display: none; }
+    .adv-body.open { display: block; }
+
+    /* ── Quiz progress ── */
+    .quiz-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .qp-label { font-size: 11px; color: var(--muted); letter-spacing: .1em; white-space: nowrap; flex-shrink: 0; }
+    .qp-track { flex: 1; height: 2px; background: var(--border); }
+    .qp-fill  { height: 100%; background: var(--accent); transition: width .4s ease; }
+    .quiz-wrap { transition: opacity .22s ease; }
+    .quiz-wrap.fading { opacity: 0; }
+
+    /* ── Scale ── */
+    .q-block { padding: 16px 0; border-bottom: 1px solid var(--border); }
+    .q-block:last-child { border-bottom: none; }
+    .q-cat { display: inline-block; font-size: 9px; letter-spacing: .18em; color: var(--accent); border: 1px solid var(--accent-light); background: var(--accent-light); padding: 2px 8px; margin-bottom: 7px; }
+    .q-title { font-size: 14px; line-height: 1.7; margin-bottom: 5px; }
+    .q-sub   { font-size: 11px; color: var(--muted); line-height: 1.7; margin-bottom: 12px; }
+    .scale-row { display: flex; gap: 5px; }
+    .scale-opt { flex: 1; cursor: pointer; }
+    .scale-opt input { display: none; }
+    .scale-pill { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 3px 7px; border: 1px solid var(--border); background: var(--bg); transition: all .18s; user-select: none; }
+    .scale-opt input:checked ~ .scale-pill { border-color: var(--accent); background: var(--accent-light); }
+    .scale-num { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1; }
+    .scale-opt input:checked ~ .scale-pill .scale-num { color: var(--accent); }
+    .scale-lbl { font-size: 9px; color: var(--muted); line-height: 1.2; white-space: nowrap; }
+    .scale-opt input:checked ~ .scale-pill .scale-lbl { color: var(--accent); }
+
+    /* ── Loading ring ── */
+    @keyframes ring-spin    { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+    @keyframes ring-breathe { 0%,100% { opacity:.4; transform:scale(.93); } 50% { opacity:1; transform:scale(1.07); } }
+    @keyframes dot-pulse    { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+    .arc-spin      { transform-origin: 60px 60px; transform-box: fill-box; animation: ring-spin 5s linear infinite; }
+    .inner-breathe { transform-origin: 60px 60px; transform-box: fill-box; animation: ring-breathe 2.8s ease-in-out infinite; }
+    .center-pulse  { animation: dot-pulse 2.8s ease-in-out infinite; }
+    .loading-txt   { transition: opacity .3s ease; }
+
+    /* ── Bars ── */
+    .bar-bg   { height: 2px; background: var(--border); }
+    .bar-fill { height: 100%; background: linear-gradient(90deg,#C8A97A,#8B6F47); transition: width 1s ease; }
+
+    /* ── Cert banner ── */
+    .cert-banner {
+      padding: 9px 14px; border: 1px solid var(--border); background: #F7F5F0;
+      margin-bottom: 18px; font-size: 10px; color: var(--muted);
+      line-height: 1.8; letter-spacing: .04em; text-align: center;
+    }
+
+    /* ── Birth info bar ── */
+    .birth-bar {
+      display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+      gap: 6px; padding: 8px 14px; border: 1px solid var(--border);
+      background: var(--accent-light); margin-bottom: 20px;
+      font-size: 11px; color: var(--accent); letter-spacing: .1em;
+    }
+
+    /* ══ RESULT CARDS ══ */
+    .r-card {
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .r-card-hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    @media (min-width: 420px) { .r-card-hd { padding: 13px 22px; } }
+    .r-card-num {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: var(--ink); color: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; letter-spacing: 0;
+    }
+    .r-card-label {
+      font-size: 10px; letter-spacing: .2em; color: var(--muted);
+    }
+    .r-card-title-sm {
+      font-size: 13px; letter-spacing: .06em; color: var(--ink); margin-left: auto;
+    }
+    .r-card-bd {
+      padding: 16px 18px; background: #FDFCF9;
+    }
+    @media (min-width: 420px) { .r-card-bd { padding: 18px 22px; } }
+
+    /* Card A – verdict banner */
+    .verdict-banner {
+      background: linear-gradient(135deg, #2A2218 0%, #3D2E1A 100%);
+      padding: 24px 20px 20px; text-align: center;
+    }
+    .verdict-badge {
+      display: inline-block; padding: 3px 14px;
+      border: 1px solid rgba(200,169,122,.5);
+      color: var(--accent-mid); font-size: 11px; letter-spacing: .22em; margin-bottom: 10px;
+    }
+    .verdict-title {
+      font-size: 22px; font-weight: 600; letter-spacing: .1em;
+      color: #F4EFE6; line-height: 1.4;
+    }
+    .verdict-sub {
+      font-size: 10px; color: rgba(200,169,122,.6);
+      letter-spacing: .22em; margin-top: 6px;
+    }
+    #radar-chart { width: 100%; height: 260px; display: block; }
+    .radar-caption {
+      font-size: 10px; color: var(--muted); text-align: center;
+      letter-spacing: .1em; padding: 6px 0 12px;
+    }
+
+    /* Card B – source */
+    .source-item { padding: 13px 0; border-bottom: 1px solid var(--border); }
+    .source-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .source-item-title {
+      font-size: 13px; color: var(--ink); margin-bottom: 6px; line-height: 1.5;
+    }
+    .source-item-title::before {
+      content: '◈ '; color: var(--accent); font-size: 10px;
+    }
+    .source-item-text { font-size: 12px; color: var(--muted); line-height: 1.9; }
+
+    /* Card C – plan */
+    .plan-item {
+      display: flex; gap: 14px; padding: 14px 0;
+      border-bottom: 1px solid var(--border); align-items: flex-start;
+    }
+    .plan-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .plan-icon {
+      width: 38px; height: 38px; flex-shrink: 0;
+      border: 1px solid var(--border); background: var(--accent-light);
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .plan-label { font-size: 10px; color: var(--muted); letter-spacing: .15em; margin-bottom: 5px; }
+    .plan-text  { font-size: 13px; color: var(--ink); line-height: 1.85; }
+    .plan-sub   { font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 4px; }
+
+    /* Card D – anchor */
+    .anchor-img-wrap { position: relative; overflow: hidden; }
+    .anchor-img-wrap img { width: 100%; display: block; filter: brightness(1.02); }
+    .anchor-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(30,20,10,.7));
+      padding: 28px 16px 14px;
+    }
+    .anchor-overlay-name {
+      font-size: 13px; color: rgba(240,234,224,.9);
+      letter-spacing: .1em; margin-bottom: 4px;
+    }
+    .anchor-overlay-stone {
+      font-size: 11px; color: rgba(200,169,122,.85); letter-spacing: .14em;
+    }
+    .anchor-tagline {
+      font-size: 14px; color: var(--ink); line-height: 1.75;
+      margin-bottom: 10px; letter-spacing: .02em;
+    }
+    .anchor-tagline strong { color: var(--accent); }
+    .anchor-desc { font-size: 12px; color: var(--muted); line-height: 1.9; }
+
+    /* CTA section */
+    .cta-section { margin-top: 6px; }
+    .btn-unlock {
+      background: linear-gradient(135deg, #5C3A1E 0%, #8B6F47 50%, #C8A97A 100%);
+      color: white; border: none; padding: 17px 20px; font-family: inherit;
+      font-size: 14px; letter-spacing: .06em; cursor: pointer;
+      width: 100%; display: block; text-align: center; transition: opacity .2s;
+      line-height: 1.4;
+    }
+    .btn-unlock:hover { opacity: .9; }
+    .cta-secondary {
+      display: block; text-align: center; margin-top: 14px;
+      font-size: 11px; color: var(--muted); letter-spacing: .06em;
+      cursor: pointer; text-decoration: none; padding: 6px;
+    }
+    .cta-secondary:hover { color: var(--accent); }
+
+    .footer-note {
+      font-size: 11px; color: var(--muted); letter-spacing: .07em;
+      margin-top: 14px; text-align: center; line-height: 1.9;
+    }
+
+    /* ══ 内测申请弹窗 ══ */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      background: rgba(20, 14, 8, 0.55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1; pointer-events: all;
+    }
+    .modal-card {
+      width: 100%; max-width: 320px;
+      background: rgba(253, 252, 249, 0.96);
+      border-radius: 16px;
+      border: 1px solid rgba(221, 217, 208, 0.8);
+      padding: 28px 24px 24px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(20,14,8,.25), 0 4px 16px rgba(20,14,8,.12);
+      transform: translateY(16px) scale(.97);
+      transition: transform .35s cubic-bezier(.22,.68,0,1.2);
+      position: relative;
+    }
+    .modal-overlay.open .modal-card {
+      transform: translateY(0) scale(1);
+    }
+    .modal-close {
+      position: absolute; top: 12px; right: 14px;
+      width: 28px; height: 28px;
+      border: none; background: none; cursor: pointer;
+      color: var(--muted); font-size: 18px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; transition: background .2s;
+    }
+    .modal-close:hover { background: rgba(139,111,71,.12); color: var(--accent); }
+    .modal-eyebrow {
+      font-size: 9px; letter-spacing: .28em; color: var(--muted); margin-bottom: 14px;
+    }
+    .modal-qr {
+      width: 210px; margin: 0 auto 16px;
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .modal-qr img { width: 100%; height: auto; display: block; }
+    .modal-hint {
+      font-size: 11px; color: var(--muted); letter-spacing: .08em;
+      margin-bottom: 14px; line-height: 1.7;
+    }
+    .modal-wechat-row {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: var(--accent-light); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+    }
+    .modal-wechat-id {
+      font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: .05em; flex: 1; text-align: left;
+    }
+    .copy-btn {
+      flex-shrink: 0; background: var(--ink); color: var(--bg);
+      border: none; border-radius: 6px; padding: 6px 12px;
+      font-family: inherit; font-size: 11px; letter-spacing: .08em;
+      cursor: pointer; transition: background .2s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: #444; }
+    .copy-btn.copied { background: #5C7A4A; }
+    .modal-tagline {
+      font-size: 12px; color: var(--muted); line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+<!-- ════════════════════════
+     STEP 1 · 能量档案初始化
+════════════════════════ -->
+<div class="step active" id="step-1">
+  <div class="card">
+    <div class="header-label">HERBLAB LABORATORY · 能量感知校准</div>
+
+    <div class="step-track">
+      <div class="s-dot now"></div><div class="s-seg"></div>
+      <div class="s-dot"></div><div class="s-seg"></div>
+      <div class="s-dot"></div><div class="s-seg"></div>
+      <div class="s-dot"></div>
+    </div>
+
+    <div class="deco-line" style="margin-bottom:20px;">Step 01 · 能量档案初始化</div>
+    <div style="font-size:18px;letter-spacing:.07em;margin-bottom:8px;">基础信息录入</div>
+    <div style="font-size:12px;color:var(--muted);line-height:2;margin-bottom:26px;">
+      能量感知校准需要您的基础信息，以便生成<br>最贴合您气场特质的专属报告。
+    </div>
+
+    <!-- 性别 -->
+    <div style="margin-bottom:18px;">
+      <div class="f-label">性别 &nbsp;GENDER</div>
+      <div style="display:flex;gap:10px;">
+        <button class="gender-btn" id="btn-m" onclick="pickGender('m')">♂&ensp;男性</button>
+        <button class="gender-btn" id="btn-f" onclick="pickGender('f')">♀&ensp;女性</button>
+      </div>
+    </div>
+
+    <!-- 出生日期 -->
+    <div style="margin-bottom:16px;">
+      <div class="f-label">出生日期 &nbsp;BIRTH DATE</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+        <div style="position:relative;">
+          <select class="f-select" id="inp-byear"><option value="">年份</option></select>
+          <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:10px;color:var(--muted);">▾</div>
+        </div>
+        <div style="position:relative;">
+          <select class="f-select" id="inp-bmonth"><option value="">月</option></select>
+          <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:10px;color:var(--muted);">▾</div>
+        </div>
+        <div style="position:relative;">
+          <select class="f-select" id="inp-bday"><option value="">日</option></select>
+          <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:10px;color:var(--muted);">▾</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 出生时辰 -->
+    <div style="margin-bottom:22px;">
+      <div class="f-label">出生时辰（可选）&nbsp;BIRTH HOUR</div>
+      <div style="position:relative;">
+        <select class="f-select" id="inp-shichen"><option value="">不知道 / 暂不填写</option></select>
+        <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:10px;color:var(--muted);">▾</div>
+      </div>
+    </div>
+
+    <!-- 高级选项：身高体重（可选） -->
+    <div style="margin-bottom:24px;">
+      <div class="adv-toggle" onclick="toggleAdv()">
+        体型参数（可选，用于 BMI 分析）<span class="adv-toggle-arrow" id="adv-arrow">▾</span>
+      </div>
+      <div class="adv-body" id="adv-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+          <div>
+            <div class="f-label">身高 &nbsp;cm</div>
+            <input class="f-input" type="number" id="inp-h" placeholder="168" inputmode="numeric" />
+          </div>
+          <div>
+            <div class="f-label">体重 &nbsp;kg</div>
+            <input class="f-input" type="number" id="inp-w" placeholder="55" inputmode="numeric" />
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">若填写，报告中将显示 BMI 能量指数分析</div>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="s1Submit()">确认信息 · 开始能量感知 →</button>
+  </div>
+  <div class="footer-note">您的信息仅用于生成本次能量校准报告</div>
+</div>
+
+
+<!-- ════════════════════════
+     STEP 2 · 能量感知（分页）
+════════════════════════ -->
+<div class="step" id="step-2">
+  <div class="card">
+    <div class="header-label">HERBLAB LABORATORY · 能量感知校准</div>
+
+    <div class="step-track">
+      <div class="s-dot done"></div><div class="s-seg done"></div>
+      <div class="s-dot now"></div><div class="s-seg"></div>
+      <div class="s-dot"></div><div class="s-seg"></div>
+      <div class="s-dot"></div>
+    </div>
+
+    <div class="deco-line" style="margin-bottom:16px;">Step 02 · 十维能量感知</div>
+
+    <div class="quiz-progress">
+      <span class="qp-label">第 <span id="qp-cur">1</span>&thinsp;/&thinsp;5 组</span>
+      <div class="qp-track"><div class="qp-fill" id="qp-fill" style="width:20%;"></div></div>
+      <span style="font-size:10px;color:var(--muted);white-space:nowrap;" id="qp-range">Q1–Q2</span>
+    </div>
+
+    <div class="quiz-wrap" id="q-wrap"></div>
+
+    <div style="margin-top:22px;">
+      <button class="btn-primary" id="quiz-next-btn" onclick="quizNext()">下一组 →</button>
+      <button class="btn-outline"  id="quiz-prev-btn" onclick="quizPrev()">← 上一组</button>
+    </div>
+  </div>
+  <div class="footer-note">请根据近三个月的真实感受如实填写</div>
+</div>
+
+
+<!-- ════════════════════════
+     STEP 3 · 能量校准分析中
+════════════════════════ -->
+<div class="step" id="step-3">
+  <div class="card" style="text-align:center;padding:56px 24px 52px;">
+    <div class="header-label" style="margin-bottom:28px;">HERBLAB · 能量场分析中</div>
+
+    <div style="width:160px;height:160px;margin:0 auto 28px;">
+      <svg viewBox="0 0 120 120" width="160" height="160" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="60" cy="60" r="54" fill="none" stroke="#EDE9E1" stroke-width="1"/>
+        <circle cx="60" cy="60" r="54" fill="none" stroke="#8B6F47" stroke-width="2" stroke-dasharray="72 267" stroke-linecap="round" class="arc-spin"/>
+        <circle cx="60" cy="60" r="43" fill="none" stroke="#8B6F47" stroke-width=".8" class="inner-breathe"/>
+        <circle cx="60" cy="60" r="48" fill="none" stroke="#C8A97A" stroke-width=".5" opacity=".5" class="inner-breathe" style="animation-delay:-1.4s;"/>
+        <g class="inner-breathe"><circle cx="60" cy="60" r="7" fill="#F4EFE6" stroke="#C8A97A" stroke-width=".8"/></g>
+        <circle cx="60" cy="60" r="3" fill="#8B6F47" class="center-pulse"/>
+        <text x="60" y="83" text-anchor="middle" font-size="6.5" fill="#8A8680" letter-spacing="1.5" font-family="serif">HERBLAB</text>
+      </svg>
+    </div>
+
+    <div class="loading-txt" id="load-main" style="font-size:13px;letter-spacing:.05em;color:var(--ink);min-height:22px;margin-bottom:6px;">正在感知您的能量信息...</div>
+    <div class="loading-txt" id="load-sub" style="font-size:11px;color:var(--muted);letter-spacing:.1em;min-height:18px;">请稍候</div>
+
+    <div class="bar-bg" style="margin-top:28px;">
+      <div class="bar-fill" id="load-bar" style="width:0%;transition:width .9s ease;"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════
+     STEP 4 · 能量校准报告
+════════════════════════ -->
+<div class="step" id="step-4">
+
+  <!-- 顶部元信息 -->
+  <div style="padding:0 0 14px;">
+    <div class="header-label" style="margin-bottom:10px;">HERBLAB LABORATORY · 能量校准报告</div>
+    <div class="cert-banner">
+      依据《中医体质分类与判定》国家标准 · 十维能量信号综合感知解读
+    </div>
+    <div id="info-bar"></div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗
+       卡片 A · 能量气场看板
+  ╚══════════════════════════════╝ -->
+  <div class="r-card">
+    <div class="r-card-hd">
+      <div class="r-card-num">A</div>
+      <div class="r-card-label">能量气场看板 · ENERGY FIELD</div>
+    </div>
+
+    <!-- 判词横幅 -->
+    <div class="verdict-banner">
+      <div class="verdict-badge" id="r-badge">—</div>
+      <div class="verdict-title" id="r-title">—</div>
+      <div class="verdict-sub" id="r-sub">—</div>
+    </div>
+
+    <!-- 雷达图 -->
+    <div style="background:#FDFCF9;padding:4px 0 0;">
+      <div id="radar-chart"></div>
+      <div class="radar-caption">五维气场能量分布 · 值越高能量越充盈</div>
+    </div>
+
+    <!-- 磁场判词 -->
+    <div class="r-card-bd" id="mfc-body" style="border-top:1px solid var(--border);"></div>
+  </div>
+
+
+  <!-- ╔══════════════════════════════╗
+       卡片 B · 深度溯源
+  ╚══════════════════════════════╝ -->
+  <div class="r-card">
+    <div class="r-card-hd">
+      <div class="r-card-num">B</div>
+      <div class="r-card-label">深度溯源 · ROOT CAUSE</div>
+      <div class="r-card-title-sm">为什么您的磁场会受阻？</div>
+    </div>
+    <div class="r-card-bd" id="source-body"></div>
+  </div>
+
+
+  <!-- ╔══════════════════════════════╗
+       卡片 C · 专属调频方案
+  ╚══════════════════════════════╝ -->
+  <div class="r-card">
+    <div class="r-card-hd">
+      <div class="r-card-num">C</div>
+      <div class="r-card-label">专属调频方案 · FREQUENCY TUNING</div>
+      <div class="r-card-title-sm">磁场修复建议</div>
+    </div>
+    <div class="r-card-bd" id="plan-body"></div>
+  </div>
+
+
+  <!-- ╔══════════════════════════════╗
+       卡片 D · 能量锚点
+  ╚══════════════════════════════╝ -->
+  <div class="r-card">
+    <div class="r-card-hd">
+      <div class="r-card-num">D</div>
+      <div class="r-card-label">能量锚点 · PHYSICAL ANCHOR</div>
+      <div class="r-card-title-sm">随身调频方案</div>
+    </div>
+    <div id="anchor-body"></div>
+  </div>
+
+
+  <!-- ╔══════════════════════════════╗
+       转化引导
+  ╚══════════════════════════════╝ -->
+  <div class="cta-section">
+    <button class="btn-unlock" onclick="handleCTA()">
+      领取详细调理手册 &amp; 获取首批内测名额 →
+    </button>
+    <a class="cta-secondary" onclick="handleFeedback()">
+      暂时不加，匿名反馈我的测试感悟 →
+    </a>
+    <button class="btn-outline" onclick="resetAll()" style="margin-top:6px;">重新校准 · 生成新报告</button>
+  </div>
+
+  <div class="footer-note">
+    药珠实验室 · 以天然草本为介质，守护身心能量平衡<br>
+    <span style="font-size:10px;">本报告仅供参考，不构成医疗诊断意见</span>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<!-- ════════════════════════
+     内测申请弹窗
+════════════════════════ -->
+<div class="modal-overlay" id="wechat-modal" onclick="handleModalOutsideClick(event)">
+  <div class="modal-card" id="modal-card">
+    <button class="modal-close" onclick="closeModal()" aria-label="关闭">×</button>
+
+    <div class="modal-eyebrow">HERBLAB · 内测申请</div>
+
+    <!-- 二维码 -->
+    <div class="modal-qr">
+      <img src="./wechat-qr.png" alt="微信二维码" />
+    </div>
+
+    <div class="modal-hint">
+      长按或扫描二维码<br>添加微信好友
+    </div>
+
+    <!-- 微信号 + 一键复制 -->
+    <div class="modal-wechat-row">
+      <div>
+        <div style="font-size:9px;letter-spacing:.18em;color:var(--muted);margin-bottom:3px;">微信号</div>
+        <div class="modal-wechat-id" id="wechat-id-text">18268390197</div>
+      </div>
+      <button class="copy-btn" id="copy-btn" onclick="copyWechat()">一键复制</button>
+    </div>
+
+    <div class="modal-tagline">
+      添加后备注
+      <strong style="color:var(--accent);">【内测申请】</strong><br>
+      即可领取详细调理手册与专属定制手串方案 🌿
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+const S = {
+  gender: null, age: 28,
+  birthYear: null, birthMonth: null, birthDay: null, birthShichen: null,
+  height: null, weight: null, bmi: null,
+  answers: new Array(10).fill(0),
+  dims: {}, topDim: null,
+  recordId: null,   // Supabase 写入后存储行 ID，供转化埋点更新使用
+};
+let _curStep = 1, _qPage = 0;
+function onAge() {} // stub — age is now computed from birthYear
+
+/* ═══════════════════════════════════════
+   BIRTH DATA SETUP  (populate selects)
+═══════════════════════════════════════ */
+const SHICHEN_LIST = [
+  '子时 (23:00–01:00)', '丑时 (01:00–03:00)', '寅时 (03:00–05:00)', '卯时 (05:00–07:00)',
+  '辰时 (07:00–09:00)', '巳时 (09:00–11:00)', '午时 (11:00–13:00)', '未时 (13:00–15:00)',
+  '申时 (15:00–17:00)', '酉时 (17:00–19:00)', '戌时 (19:00–21:00)', '亥时 (21:00–23:00)',
+];
+const SHICHEN_NOTES = [
+  '子时降生者，天生与沉夜相契，独处时能量最为充盈。',
+  '丑时降生者，生于阴阳交替之际，韧性与耐力深藏于内。',
+  '寅时降生者，黎明前的天光中降生，能量如旭日，宜把握清晨的清醒时段。',
+  '卯时降生者，晨光初照时分，气质中自带一份清醒的锐气与主动性。',
+  '辰时降生者，阳气渐升之时，上午是您能量最为充沛、最适合决策的时段。',
+  '巳时降生者，阳气正旺之时，行动力与执行力天生充沛。',
+  '午时降生者，阳极而阴生，气质中藏有柔韧的转化力与适应性。',
+  '未时降生者，阳气渐收之时，善于厚积薄发，耐力胜于爆发力。',
+  '申时降生者，金气收敛之时，思维清晰，沉稳内敛，适合深度工作。',
+  '酉时降生者，日暮之时，感知尤为细腻，傍晚是您最适合静思与创作的时段。',
+  '戌时降生者，夜幕初降，性格温暖沉稳，是天生能给予他人安全感的气场。',
+  '亥时降生者，入夜之时，灵感丰沛而深邃，深夜往往是您灵感与创意的泉源。',
+];
+const SHICHEN_CHARS = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+
+(function initSelects() {
+  const yEl = document.getElementById('inp-byear');
+  for (let y = 2006; y >= 1960; y--) {
+    const o = document.createElement('option'); o.value = y; o.textContent = y + ' 年';
+    yEl.appendChild(o);
+  }
+  const mEl = document.getElementById('inp-bmonth');
+  for (let m = 1; m <= 12; m++) {
+    const o = document.createElement('option'); o.value = m; o.textContent = m + ' 月';
+    mEl.appendChild(o);
+  }
+  const dEl = document.getElementById('inp-bday');
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option'); o.value = d; o.textContent = d + ' 日';
+    dEl.appendChild(o);
+  }
+  const scEl = document.getElementById('inp-shichen');
+  SHICHEN_LIST.forEach((s, i) => {
+    const o = document.createElement('option'); o.value = i; o.textContent = s;
+    scEl.appendChild(o);
+  });
+})();
+
+/* ═══════════════════════════════════════
+   10 QUESTIONS
+═══════════════════════════════════════ */
+const QUESTIONS = [
+  { dim: 'D', cat: '肝郁 · 气滞',   t: '在处理繁杂事务时，是否常感胸口憋闷，需要长叹一口气才觉舒畅，或情绪容易陷入无名烦躁？',           s: '肝主疏泄，情志郁结则气机不畅' },
+  { dim: 'B', cat: '心火 · 肝火',   t: '忙碌或熬夜后，早起是否感到口干口苦，近期是否频繁出现嘴角生疮或牙龈隐痛？',                    s: '火性炎上，口腔是内热最直接的能量外显' },
+  { dim: 'C', cat: '脾虚 · 湿气',   t: '身体是否总有一种挥之不去的"沉重感"，晨起排便不畅，餐后常感腹部胀满、倦怠困乏？',             s: '脾失健运则湿浊内生，困阻气机' },
+  { dim: 'B', cat: '阴虚 · 内热',   t: '入睡前或午后，是否感到手心、脚心莫名发热，伴随烦躁不安，仿佛身体深处有"虚火"蒸腾？',          s: '阴虚则虚热内扰，耗灼津液' },
+  { dim: 'E', cat: '阳虚 · 寒湿',   t: '在空调环境或换季时，是否比旁人更为畏寒，即便热饮厚衣，手脚依然难以回温？',                    s: '阳气不足则温煦失职，寒湿内蕴' },
+  { dim: 'C', cat: '湿热 · 蕴结',   t: '面部皮肤是否容易出油、反复起痘，或经常感到头重如裹，仿佛身上总带着一层洗不净的湿气？',          s: '湿热蕴蒸于肌表，困阻清阳' },
+  { dim: 'A', cat: '气虚 · 损耗',   t: '工作到下午时，是否明显感到中气不足，言语少力，甚至连日常沟通也觉得是一种能量透支？',            s: '脾肺气虚则元气难以持续供养' },
+  { dim: 'A', cat: '血虚 · 荣养',   t: '面色是否显得苍白、缺乏光泽，长时间面对屏幕后，是否感到眼睛干涩刺痛尤为强烈？',                 s: '肝开窍于目，血不荣目则目失濡养' },
+  { dim: 'D', cat: '神门 · 失调',   t: '睡前大脑是否难以平静，思虑繁杂、多梦易醒，以至清晨醒来仍感神疲乏力、难以振作？',               s: '心神失守，魂不安宅，影响夜间能量修复' },
+  { dim: 'C', cat: '痰湿 · 阻滞',   t: '晨起是否感觉喉咙有痰、咯吐不爽，或留意舌苔时发现显得白厚、滑腻？',                           s: '痰湿上蒙，肺气宣降失常' },
+];
+const QUIZ_PAGES   = [[0,1],[2,3],[4,5],[6,7],[8,9]];
+const SCALE_LABELS = ['从不','偶尔','经常','持续','严重'];
+
+/* ═══════════════════════════════════════
+   5 DIMENSIONS
+═══════════════════════════════════════ */
+const DIMS_DEF = {
+  A: { label: '气血能量', qs: [6,7]   },
+  B: { label: '阴阳平衡', qs: [1,3]   },
+  C: { label: '湿浊代谢', qs: [2,5,9] },
+  D: { label: '情志流动', qs: [0,8]   },
+  E: { label: '阳气温煦', qs: [4]     },
+};
+
+/* ═══════════════════════════════════════
+   5 RESULT TYPES
+═══════════════════════════════════════ */
+const RESULTS = {
+  A: {
+    badge: '气血待充',
+    title: '气血待充 · 生命力蓄积中',
+    sub:   'VITAL ENERGY RECHARGING',
+    mfc:   '此刻的您，如秋收后的田野——一季给予之后，深层的补给尚未到来。根脉仍在，生机未散，静待一场温润的回养，您的气色将重新焕发光华。',
+    source: [
+      { title: '气血亏虚，能量供给出现断层',
+        text:  '气血是驱动人体一切活动的原始能量——气行则血行，血足则神明。当两者同时匮乏，事业气场与行动能量首先受到冲击，表现为下午精力断崖、难以维持高强度输出。' },
+      { title: '生机渐弱，人际磁场吸引力减退',
+        text:  '充盈的气血赋予人面色红润、目光有神——这些都是人际磁场的物理载体。气血不足时，这些外在能量信号减弱，人际吸引力与个人气场随之降低。' },
+    ],
+    plan: {
+      scent:  { formula: '当归 60 : 黄芪 40', desc: '当归温血活络，黄芪固本培元——两者相合，为能量场持续注入生命暖流，令气色渐复、精力回升。' },
+      rhythm: { time: '亥时（21:00–23:00）入眠', desc: '亥时肾经当令，此时入睡令精气得到最深层的修复与储存，是气血养护的黄金时窗。每晚提前 30 分钟卧床，是最低成本的气血补充方式。' },
+    },
+    stone:      '南红玛瑙 · 黄玉髓',
+    anchorName: '定气 · 蓄血',
+    anchorDesc: '以火系赤红之力温养心血，土系暖黄之气健运脾土——手串内嵌当归 60 : 黄芪 40 专属药芯，通过日常嗅觉持续作用，为气血的生化提供持续的物理补偿。',
+  },
+  B: {
+    badge: '虚火待平',
+    title: '虚火受困 · 能量待稳',
+    sub:   'INTERNAL FIRE BALANCING',
+    mfc:   '您的内在正经历一场无声的燃烧——不是怒火，而是月夜里无人添油的灯芯。需要一滴清凉的甘露，护持那点光，不让它在无知无觉中悄然耗尽。',
+    source: [
+      { title: '虚火内燃，情绪能量持续消耗',
+        text:  '阴液是平衡体内阴阳的根本物质。当阴液不足，体内便生虚火——这股内耗性的热量正持续侵蚀您的情绪韧性，令您陷入莫名的焦躁与入睡困难。' },
+      { title: '心火扰神，磁场震动紊乱',
+        text:  '心神安则磁场稳。虚火扰动心神，不仅影响入睡质量，更令您在人际互动中容易出现情绪起伏，使本可吸引的能量因磁场紊乱而悄然流失。' },
+    ],
+    plan: {
+      scent:  { formula: '玄参 40 : 麦冬 40 : 生地黄 20', desc: '玄参养阴清热，麦冬润心安神，生地凉血固本——三者共同构建清凉的能量防护层，令浮动的燥意渐渐沉落。' },
+      rhythm: { time: '午时（11:00–13:00）静息 10 分钟', desc: '午时心经当令，阳气最旺。于此时短暂静坐闭目，令心火归位，是防止虚热在午后持续蔓延的关键干预点。' },
+    },
+    stone:      '青金石 · 月光石',
+    anchorName: '清火 · 滋阴',
+    anchorDesc: '以水系深蓝之力滋肾润燥，金系清润之气生水降虚火——手串内嵌玄参 40 : 麦冬 40 : 生地黄 20 专属药芯，为内在升腾的热意持续覆上一层清凉的月色。',
+  },
+  C: {
+    badge: '湿滞待清',
+    title: '湿滞困身 · 流动力受阻',
+    sub:   'FLOW ENERGY CLEARING',
+    mfc:   '您的气场如梅雨后的清晨——雾气弥漫，湿意未散，步履沉重。这不是您的本来面目，只是能量被暂时困住。待阳光升起，一切将恢复通透与轻盈。',
+    source: [
+      { title: '湿邪困阻，能量流通管道堵塞',
+        text:  '湿邪最易困脾，脾为后天之本。当湿浊淤积，能量的生产与流通渠道双双受阻——行动力、专注力因此持续处于低位，感知迟钝，反应缓慢。' },
+      { title: '浊气弥散，人际磁场蒙尘',
+        text:  '湿浊阻断了清气的升发，令人无意中散发出一种沉重、拖沓的能量信号——这种信号在人际互动中悄然传递，影响他人对您气场的感知与评价。' },
+    ],
+    plan: {
+      scent:  { formula: '陈皮 40 : 沉香 30 : 茯苓 30', desc: '陈皮清香开胸，沉香定气暖脾，茯苓渗湿通络——三味合用，为能量通道做深层清洁，令困重的身心感到通透与轻盈。' },
+      rhythm: { time: '辰时（07:00–09:00）快走 20 分钟', desc: '辰时胃经当令，此时运动能最大化激活脾胃运化功能，以微微汗出为度，有效推动湿浊排出，是祛湿效率最高的运动时段。' },
+    },
+    stone:      '绿松石 · 黄晶',
+    anchorName: '化湿 · 通络',
+    anchorDesc: '以木系青绿之力疏通壅滞的气机，土系暖黄之气健运脾土——手串内嵌陈皮 40 : 沉香 30 : 茯苓 30 专属药芯，持续为能量通道做物理级的清洁维护。',
+  },
+  D: {
+    badge: '郁结待疏',
+    title: '肝郁气滞 · 能量待释',
+    sub:   'EMOTIONAL ENERGY RELEASING',
+    mfc:   '您的能量像一张拉满的弓，张力十足，却尚未找到释放的方向。那些积压在胸口的叹息，是能量在等待一个出口——疏导的那一刻，将化为强大的前行之力。',
+    source: [
+      { title: '肝郁气滞，执行力能量受损',
+        text:  '肝主疏泄，调畅情志与气机。当肝气郁结，能量便在体内持续壅积而无处宣泄——表现为胸口憋闷、执行力低下，即便思路清晰也难以转化为实际行动。' },
+      { title: '情志压抑，人际磁场信号杂乱',
+        text:  '郁结的能量状态在磁场层面表现为信号混乱——内心积压的情绪与向外传递的表情、语言之间存在断层，令他人感到难以靠近，无意中阻断了人际能量的流动。' },
+    ],
+    plan: {
+      scent:  { formula: '柴胡 40 : 香附 30 : 玫瑰花 30', desc: '柴胡疏肝理气，香附行气宽中，玫瑰活血悦颜——三者相合，如同为郁结的能量打开了一道温柔的疏通阀门，令积压的情志得以流动与释放。' },
+      rhythm: { time: '子时（23:00前）必须入眠', desc: '子时胆经当令，是疏肝解郁的最佳时窗。此时入眠令胆气得以升发，为次日的气机流动奠定基础。未能子时入眠，是加重肝郁最直接的生活诱因。' },
+    },
+    stone:      '白玉 · 绿幽灵',
+    anchorName: '疏木 · 安神',
+    anchorDesc: '以金系洁白之力平抑过旺肝木，引气机重归顺畅——手串内嵌柴胡 40 : 香附 30 : 玫瑰花 30 专属药芯，持续为郁结的能量提供温柔的出口，令胸口的憋闷渐渐化解。',
+  },
+  E: {
+    badge: '阳能待升',
+    title: '阳气亏虚 · 暖力蓄积中',
+    sub:   'YANG ENERGY AWAKENING',
+    mfc:   '您正处于冬至前夜——阴寒最盛之时，也是阳气回升的起点。这不是衰弱，而是蓄势。一旦找到温润的引导，您内在的火种将重新点燃，生命的暖流即将破土而出。',
+    source: [
+      { title: '命门火衰，能量磁场根基失温',
+        text:  '命门之火是一身阳气的根本。当阳气亏虚，所有上层能量——事业气场、行动能量、人际吸引力——均处于低位运转，如同电力不足时强行维持高负荷运转的设备。' },
+      { title: '寒湿内蕴，磁场发散力受阻',
+        text:  '寒性凝滞，湿性黏腻——两者相合，使体内能量无法向外充分发散，导致个人气场收缩、行动迟缓，对外部机遇的感知力与响应速度大幅降低。' },
+    ],
+    plan: {
+      scent:  { formula: '附子 30 : 肉桂 40 : 干姜 30', desc: '附子回阳固本，肉桂温经散寒，干姜暖中驱湿——三味温热之品合力，为能量场重新引燃底层火种，令沉寒由内向外渐渐消散。' },
+      rhythm: { time: '卯时（05:00–07:00）接受晨光', desc: '卯时阳气初升，此时在户外接受自然晨光 15 分钟，是最高效的天然阳气补充方式。坚持 21 天，您将明显感受到午后能量低谷的改善。' },
+    },
+    stone:      '石榴石 · 虎眼石',
+    anchorName: '暖阳 · 破寒',
+    anchorDesc: '以火系深红之力点燃命门阳气，土系虎眼之暖制约寒湿——手串内嵌附子 30 : 肉桂 40 : 干姜 30 专属药芯，为沉寒的身心提供持续的物理级温煦，令能量磁场从底层回暖。',
+  },
+};
+
+/* ═══════════════════════════════════════
+   LOADING MESSAGES
+═══════════════════════════════════════ */
+const LOAD_MSGS = [
+  ['正在感知您的能量信息...',           '综合近三个月的身体感受'],
+  ['校准五维能量场分布...',             '参照国家中医药管理局标准'],
+  ['甄选最契合您的草本香方...',         '融合五行理论与芳香调理'],
+  ['感知您的磁场特征...',               '整合十维信号综合分析'],
+  ['能量校准报告生成完毕...',           '您的专属方案已就绪'],
+];
+
+/* ═══════════════════════════════════════
+   SPA NAVIGATION
+═══════════════════════════════════════ */
+function goStep(n) {
+  const from = document.getElementById('step-' + _curStep);
+  const to   = document.getElementById('step-' + n);
+  if (!from || !to || from === to) return;
+  from.style.transition = 'opacity .3s ease'; from.style.opacity = '0';
+  setTimeout(() => {
+    from.classList.remove('active'); from.style.opacity = ''; from.style.transition = '';
+    to.classList.add('active'); to.style.opacity = '0';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      to.style.transition = 'opacity .3s ease'; to.style.opacity = '1';
+      _curStep = n;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => { to.style.transition = ''; to.style.opacity = ''; }, 320);
+    }));
+  }, 290);
+}
+
+/* ═══════════════════════════════════════
+   STEP 1 LOGIC
+═══════════════════════════════════════ */
+function pickGender(g) {
+  S.gender = g;
+  document.getElementById('btn-m').classList.toggle('sel', g === 'm');
+  document.getElementById('btn-f').classList.toggle('sel', g === 'f');
+}
+function onAge(v) { S.age = +v; document.getElementById('age-val').textContent = v; }
+
+function toggleAdv() {
+  const body  = document.getElementById('adv-body');
+  const arrow = document.getElementById('adv-arrow');
+  const open  = body.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+}
+
+function s1Submit() {
+  if (!S.gender) { alert('请选择性别'); return; }
+  const by = document.getElementById('inp-byear').value;
+  const bm = document.getElementById('inp-bmonth').value;
+  const bd = document.getElementById('inp-bday').value;
+  if (!by || !bm || !bd) { alert('请完整填写出生日期'); return; }
+  S.birthYear  = +by; S.birthMonth = +bm; S.birthDay = +bd;
+  S.age = new Date().getFullYear() - S.birthYear; // derive age from birth year
+  const sc = document.getElementById('inp-shichen').value;
+  S.birthShichen = sc !== '' ? +sc : null;
+
+  const h = parseFloat(document.getElementById('inp-h').value);
+  const w = parseFloat(document.getElementById('inp-w').value);
+  if (h && w) {
+    if (h < 140 || h > 220) { alert('请输入有效身高（140–220 cm）'); return; }
+    if (w < 35  || w > 180) { alert('请输入有效体重（35–180 kg）'); return; }
+    S.height = h; S.weight = w; S.bmi = w / ((h / 100) ** 2);
+  } else { S.height = null; S.weight = null; S.bmi = null; }
+
+  _qPage = 0; renderQuizPage(); goStep(2);
+}
+
+/* ═══════════════════════════════════════
+   STEP 2 (paginated quiz)
+═══════════════════════════════════════ */
+function renderQuizPage() {
+  const wrap = document.getElementById('q-wrap');
+  const idx  = QUIZ_PAGES[_qPage];
+  document.getElementById('qp-cur').textContent = _qPage + 1;
+  document.getElementById('qp-fill').style.width = ((_qPage + 1) / 5 * 100) + '%';
+  document.getElementById('qp-range').textContent = 'Q' + (idx[0]+1) + '–Q' + (idx[idx.length-1]+1);
+  document.getElementById('quiz-next-btn').textContent = _qPage === QUIZ_PAGES.length - 1 ? '提交感知数据 · 生成报告' : '下一组 →';
+  document.getElementById('quiz-prev-btn').style.display = _qPage === 0 ? 'none' : 'block';
+  wrap.classList.add('fading');
+  setTimeout(() => {
+    wrap.innerHTML = idx.map(i => buildQ(i)).join('');
+    wrap.classList.remove('fading');
+  }, 200);
+}
+function buildQ(i) {
+  const q = QUESTIONS[i];
+  return `<div class="q-block">
+    <div class="q-cat">${q.cat}</div>
+    <div class="q-title">Q${i+1}. ${q.t}</div>
+    <div class="q-sub">${q.s}</div>
+    <div class="scale-row">${SCALE_LABELS.map((lbl,j) => `
+      <label class="scale-opt"><input type="radio" name="q${i}" value="${j+1}" ${S.answers[i]===j+1?'checked':''} onchange="S.answers[${i}]=${j+1}"/>
+        <div class="scale-pill"><span class="scale-num">${j+1}</span><span class="scale-lbl">${lbl}</span></div>
+      </label>`).join('')}
+    </div>
+  </div>`;
+}
+function quizNext() {
+  const blank = QUIZ_PAGES[_qPage].filter(i => S.answers[i] === 0);
+  if (blank.length) { alert(`本组还有 ${blank.length} 题未作答，请完成后继续`); return; }
+  if (_qPage < QUIZ_PAGES.length - 1) {
+    _qPage++; renderQuizPage();
+    document.getElementById('step-2').scrollIntoView({ behavior: 'smooth' });
+  } else {
+    calcDimensions();
+    saveRecord();   // 异步写库，不阻塞 UI 跳转
+    goStep(3);
+    runLoader();
+  }
+}
+function quizPrev() {
+  if (_qPage > 0) { _qPage--; renderQuizPage(); document.getElementById('step-2').scrollIntoView({ behavior: 'smooth' }); }
+  else goStep(1);
+}
+
+/* ═══════════════════════════════════════
+   DIMENSION SCORING
+═══════════════════════════════════════ */
+function calcDimensions() {
+  let top = null, topScore = -1;
+  Object.keys(DIMS_DEF).forEach(k => {
+    const d   = DIMS_DEF[k];
+    const pct = Math.round(d.qs.reduce((s,i) => s + S.answers[i], 0) / (d.qs.length * 5) * 100);
+    S.dims[k] = pct;
+    if (pct > topScore) { topScore = pct; top = k; }
+  });
+  S.topDim = top;
+}
+
+/* ═══════════════════════════════════════
+   STEP 3 LOADER
+═══════════════════════════════════════ */
+function runLoader() {
+  const mainEl = document.getElementById('load-main');
+  const subEl  = document.getElementById('load-sub');
+  const barEl  = document.getElementById('load-bar');
+  if (!mainEl || !subEl || !barEl) { renderReport(); goStep(4); return; }
+
+  barEl.style.width = '0%';
+  const total = 3200;          // 缩短总等待时间
+  const step  = total / LOAD_MSGS.length;
+  let idx = 0;
+
+  function tick() {
+    if (idx >= LOAD_MSGS.length) return;
+    mainEl.style.opacity = '0'; subEl.style.opacity = '0';
+    setTimeout(() => {
+      mainEl.textContent = LOAD_MSGS[idx][0];
+      subEl.textContent  = LOAD_MSGS[idx][1];
+      mainEl.style.opacity = '1'; subEl.style.opacity = '1';
+      barEl.style.width = ((idx + 1) / LOAD_MSGS.length * 100) + '%';
+      idx++;
+      if (idx < LOAD_MSGS.length) setTimeout(tick, step);
+    }, 200);
+  }
+  tick();
+
+  // 完成提示
+  setTimeout(() => {
+    mainEl.style.opacity = '0';
+    setTimeout(() => {
+      mainEl.textContent = '校准报告生成完毕...';
+      mainEl.style.opacity = '1';
+      barEl.style.width = '100%';
+    }, 200);
+  }, total);
+
+  // ★ 核心修复：try-catch 确保 goStep(4) 必然被执行
+  setTimeout(() => {
+    try { renderReport(); } catch (e) { console.error('[HerbLab] renderReport error:', e); }
+    goStep(4);
+  }, total + 600);
+}
+
+/* ═══════════════════════════════════════
+   STEP 4 REPORT RENDERING
+═══════════════════════════════════════ */
+let _radarInstance = null;
+
+/* 将五维中医分数转换为"能量值"（高=充盈，低=受阻） */
+function getRadarValues() {
+  const { A, B, C, D, E } = S.dims;
+  const clamp = v => Math.max(12, Math.min(95, Math.round(v)));
+  return [
+    clamp(100 - (D * 0.5 + A * 0.5) * 0.88),   // 事业气场
+    clamp(100 - (B * 0.55 + D * 0.45) * 0.88),  // 情绪韧性
+    clamp(100 - (D * 0.45 + C * 0.55) * 0.88),  // 人际磁场
+    clamp(100 - (A * 0.6  + E * 0.4)  * 0.88),  // 财运承载
+    clamp(100 - (A * 0.5  + E * 0.5)  * 0.88),  // 行动能量
+  ];
+}
+
+function renderReport() {
+  const r = RESULTS[S.topDim];
+
+  /* ── 基础信息行 ── */
+  const scStr = S.birthShichen !== null ? SHICHEN_CHARS[S.birthShichen] + '时' : '';
+  document.getElementById('info-bar').innerHTML = `
+    <div class="birth-bar">
+      ${S.birthYear}年 · ${S.birthMonth}月${S.birthDay}日
+      ${scStr ? '· <strong>' + scStr + '</strong>生' : ''}
+      · ${S.gender === 'm' ? '男' : '女'} · ${S.age}岁
+      ${S.bmi ? '· BMI <strong>' + S.bmi.toFixed(1) + '</strong>' : ''}
+    </div>`;
+
+  /* ── Card A: 判词 + 雷达图 + 磁场判词 ── */
+  document.getElementById('r-badge').textContent = r.badge;
+  document.getElementById('r-title').textContent = r.title;
+  document.getElementById('r-sub').textContent   = r.sub;
+
+  // 磁场判词
+  let mfcExtra = '';
+  if (S.birthShichen !== null)
+    mfcExtra += `<p style="font-size:12px;color:var(--muted);line-height:1.9;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-style:italic;">✦ ${SHICHEN_NOTES[S.birthShichen]}</p>`;
+  if (S.age >= 40)
+    mfcExtra += `<p style="font-size:12px;color:var(--muted);line-height:1.9;margin-top:6px;font-style:italic;">✦ ${S.age} 岁后阴气渐半，能量调护宜从"被动维持"转向"主动培元"。</p>`;
+
+  document.getElementById('mfc-body').innerHTML = `
+    <div style="font-size:9px;letter-spacing:.26em;color:var(--muted);margin-bottom:8px;">磁场判词 · ENERGY READING</div>
+    <div style="font-size:13px;line-height:2.1;color:var(--ink);">${r.mfc}</div>
+    ${mfcExtra}
+    ${S.bmi >= 24 ? `<div style="margin-top:12px;padding:10px 12px;border:1px dashed #A0522D;background:#FDF5EE;font-size:11px;color:#5C3018;line-height:1.9;"><strong style="color:#A0522D;font-size:10px;letter-spacing:.15em;">⚠ 附加感知 · 痰湿偏盛</strong><br>BMI ${S.bmi.toFixed(1)} 偏高，痰湿易于壅滞，建议加强化湿调理：薏仁、茯苓、荷叶为优先推荐。</div>` : ''}
+    ${S.bmi && S.bmi < 18.5 ? `<div style="margin-top:12px;padding:10px 12px;border:1px dashed #2D4A7A;background:#EEF2FA;font-size:11px;color:#1E3050;line-height:1.9;"><strong style="color:#2D4A7A;font-size:10px;letter-spacing:.15em;">⚠ 附加感知 · 气血根基薄弱</strong><br>BMI ${S.bmi.toFixed(1)} 偏低，气血储备薄弱，建议优先补充阿胶、龙眼肉、红糖姜枣茶。</div>` : ''}
+  `;
+
+  /* ECharts 雷达图 */
+  setTimeout(() => {
+    try {
+      if (typeof echarts === 'undefined') return;
+      const dom = document.getElementById('radar-chart');
+      if (!dom) return;
+      if (_radarInstance) { try { _radarInstance.dispose(); } catch(_) {} }
+      _radarInstance = echarts.init(dom, null, { renderer: 'svg' });
+      const vals = getRadarValues();
+      _radarInstance.setOption({
+        backgroundColor: '#FDFCF9',
+        radar: {
+          indicator: [
+            { name: '事业气场', max: 100 },
+            { name: '情绪韧性', max: 100 },
+            { name: '人际磁场', max: 100 },
+            { name: '财运承载', max: 100 },
+            { name: '行动能量', max: 100 },
+          ],
+          radius: '60%', center: ['50%', '54%'],
+          splitNumber: 4,
+          axisName: { color: '#8A8680', fontSize: 11 },
+          splitLine: { lineStyle: { color: '#DDD9D0', width: 0.8 } },
+          splitArea: { show: true, areaStyle: { color: ['rgba(240,234,224,.3)','rgba(240,234,224,.15)','rgba(249,248,244,.08)','transparent'] } },
+          axisLine: { lineStyle: { color: '#DDD9D0' } },
+        },
+        series: [{
+          type: 'radar',
+          data: [{
+            value: vals,
+            name: '气场能量',
+            areaStyle: { color: 'rgba(139,111,71,.15)' },
+            lineStyle: { color: '#8B6F47', width: 2 },
+            itemStyle: { color: '#8B6F47' },
+            symbol: 'circle', symbolSize: 6,
+          }],
+        }],
+      });
+      window.addEventListener('resize', () => { try { _radarInstance && _radarInstance.resize(); } catch(_) {} });
+    } catch(e) { console.error('[HerbLab] ECharts:', e); }
+  }, 450);
+
+  /* ── Card B: 深度溯源 ── */
+  document.getElementById('source-body').innerHTML = r.source.map(s => `
+    <div class="source-item">
+      <div class="source-item-title">${s.title}</div>
+      <div class="source-item-text">${s.text}</div>
+    </div>`).join('');
+
+  /* ── Card C: 调频方案 ── */
+  document.getElementById('plan-body').innerHTML = `
+    <div class="plan-item">
+      <div class="plan-icon">🌿</div>
+      <div>
+        <div class="plan-label">嗅觉干预 · 专属药芯配比</div>
+        <div class="plan-text">[ ${r.plan.scent.formula} ]</div>
+        <div class="plan-sub">${r.plan.scent.desc}</div>
+      </div>
+    </div>
+    <div class="plan-item">
+      <div class="plan-icon">🌙</div>
+      <div>
+        <div class="plan-label">节律建议 · 修复时间点</div>
+        <div class="plan-text">${r.plan.rhythm.time}</div>
+        <div class="plan-sub">${r.plan.rhythm.desc}</div>
+      </div>
+    </div>`;
+
+  /* ── Card D: 能量锚点 ── */
+  document.getElementById('anchor-body').innerHTML = `
+    <div class="anchor-img-wrap">
+      <img src="./bracelet.png" alt="专属能量药珠" />
+      <div class="anchor-overlay">
+        <div class="anchor-overlay-name">【${r.anchorName}】能量药珠</div>
+        <div class="anchor-overlay-stone">${r.stone}</div>
+      </div>
+    </div>
+    <div class="r-card-bd">
+      <div class="anchor-tagline">
+        您的专属 <strong>【${r.anchorName}】</strong> 能量药珠<br>——物理级的磁场补偿器
+      </div>
+      <div class="anchor-desc">${r.anchorDesc}</div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════
+   CTA & RESET
+═══════════════════════════════════════ */
+/* ── 弹窗控制 ── */
+function handleCTA() { openModal(); }
+
+function openModal() {
+  const overlay = document.getElementById('wechat-modal');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden'; // 防止背景滚动
+}
+
+function closeModal() {
+  const overlay = document.getElementById('wechat-modal');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  // 重置复制按钮状态
+  const btn = document.getElementById('copy-btn');
+  if (btn) { btn.textContent = '一键复制'; btn.classList.remove('copied'); }
+}
+
+function handleModalOutsideClick(e) {
+  // 仅点击遮罩本身（非卡片内部）时关闭
+  if (e.target === document.getElementById('wechat-modal')) closeModal();
+}
+
+function copyWechat() {
+  const id  = document.getElementById('wechat-id-text').textContent.trim();
+  const btn = document.getElementById('copy-btn');
+
+  const onCopySuccess = () => {
+    btn.textContent = '已复制 ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '一键复制'; btn.classList.remove('copied'); }, 2200);
+    markConverted();  // ★ 转化埋点：用户复制微信号即视为转化
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(id).then(onCopySuccess).catch(() => fallbackCopy(id, btn, onCopySuccess));
+  } else {
+    fallbackCopy(id, btn, onCopySuccess);
+  }
+}
+
+function fallbackCopy(text, btn, onSuccess) {
+  const el = document.createElement('textarea');
+  el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+  document.body.appendChild(el); el.select();
+  try {
+    document.execCommand('copy');
+    if (onSuccess) onSuccess();
+  } catch(_) { alert('请手动复制微信号：' + text); }
+  document.body.removeChild(el);
+}
+
+/* ═══════════════════════════════════════
+   SUPABASE · 数据写入 & 转化埋点
+═══════════════════════════════════════ */
+
+/**
+ * 提交答题后异步插入一条记录。
+ * 写入失败时仅打印警告，不影响用户体验。
+ */
+async function saveRecord() {
+  if (!db) return; // 未配置 Supabase 时静默跳过
+  try {
+    const r       = RESULTS[S.topDim];
+    const vals    = getRadarValues();   // 雷达图五维能量值（已在 calcDimensions 后可用）
+
+    const { data, error } = await db
+      .from('energy_lab_records')
+      .insert({
+        gender:        S.gender,
+        birth_year:    S.birthYear,
+        birth_month:   S.birthMonth,
+        birth_day:     S.birthDay,
+        birth_shichen: S.birthShichen,
+        age:           S.age,
+
+        dim_career:    vals[0],   // 事业气场
+        dim_emotion:   vals[1],   // 情绪韧性
+        dim_social:    vals[2],   // 人际磁场
+        dim_wealth:    vals[3],   // 财运承载
+        dim_action:    vals[4],   // 行动能量
+
+        top_dim:       S.topDim,
+        verdict_badge: r.badge,
+        verdict_title: r.title,
+        formula:       r.plan.scent.formula,
+        is_converted:  false,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    S.recordId = data.id;
+    console.info('[HerbLab] ✓ 记录已写入:', S.recordId);
+  } catch (e) {
+    console.warn('[HerbLab] 数据写入跳过（不影响用户体验）:', e.message);
+  }
+}
+
+/**
+ * 用户复制微信号后，将该记录标记为已转化。
+ */
+async function markConverted() {
+  if (!db || !S.recordId) return;
+  try {
+    const { error } = await db
+      .from('energy_lab_records')
+      .update({ is_converted: true })
+      .eq('id', S.recordId);
+    if (error) throw error;
+    console.info('[HerbLab] ✓ 转化埋点已更新:', S.recordId);
+  } catch (e) {
+    console.warn('[HerbLab] 转化埋点更新跳过:', e.message);
+  }
+}
+
+function handleFeedback() {
+  alert('感谢您的体验！\n\n您可以将感悟发送至邮箱：feedback@herblab.cn');
+}
+
+function resetAll() {
+  if (_radarInstance) { _radarInstance.dispose(); _radarInstance = null; }
+  Object.assign(S, {
+    gender: null, age: 28,
+    birthYear: null, birthMonth: null, birthDay: null, birthShichen: null,
+    height: null, weight: null, bmi: null,
+    answers: new Array(10).fill(0), dims: {}, topDim: null, recordId: null,
+  });
+  document.getElementById('btn-m').classList.remove('sel');
+  document.getElementById('btn-f').classList.remove('sel');
+  document.getElementById('inp-byear').value = '';
+  document.getElementById('inp-bmonth').value = '';
+  document.getElementById('inp-bday').value = '';
+  document.getElementById('inp-shichen').value = '';
+  document.getElementById('inp-h').value = '';
+  document.getElementById('inp-w').value = '';
+  document.querySelectorAll('.step').forEach(el => {
+    el.classList.remove('active'); el.style.opacity = ''; el.style.transition = '';
+  });
+  document.getElementById('step-1').classList.add('active');
+  _curStep = 1; _qPage = 0;
+  window.scrollTo({ top: 0 });
+}
+</script>
+</body>
+</html>
