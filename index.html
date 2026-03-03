@@ -92,7 +92,8 @@
     .gender-btn {
       flex: 1; padding: 13px 8px; border: 1px solid var(--border);
       background: var(--bg); color: var(--muted); font-family: inherit;
-      font-size: 14px; letter-spacing: .1em; cursor: pointer; transition: all .2s; text-align: center;
+      font-size: 14px; letter-spacing: .1em; cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
     }
     .gender-btn.sel { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
     input[type=range] {
@@ -389,8 +390,14 @@
     <div style="margin-bottom:18px;">
       <div class="f-label">性别 &nbsp;GENDER</div>
       <div style="display:flex;gap:10px;">
-        <button class="gender-btn" id="btn-m" onclick="pickGender('m')">♂&ensp;男性</button>
-        <button class="gender-btn" id="btn-f" onclick="pickGender('f')">♀&ensp;女性</button>
+        <button class="gender-btn" id="btn-m" onclick="pickGender('m')">
+          <span aria-hidden="true">♂</span>
+          <span>男性</span>
+        </button>
+        <button class="gender-btn" id="btn-f" onclick="pickGender('f')">
+          <span aria-hidden="true">♀</span>
+          <span>女性</span>
+        </button>
       </div>
     </div>
 
@@ -622,7 +629,7 @@
 
     <!-- 二维码 -->
     <div class="modal-qr">
-      <img src="./wechat-qr.png" alt="微信二维码" />
+      <img src="./wechat-qr.png" alt="微信二维码" loading="lazy" decoding="async" />
     </div>
 
     <div class="modal-hint">
@@ -1137,7 +1144,7 @@ function renderReport() {
   /* ── Card D: 能量锚点 ── */
   document.getElementById('anchor-body').innerHTML = `
     <div class="anchor-img-wrap">
-      <img src="./bracelet.png" alt="专属能量药珠" />
+      <img src="./bracelet.png" alt="专属能量药珠" loading="lazy" decoding="async" />
       <div class="anchor-overlay">
         <div class="anchor-overlay-name">【${r.anchorName}】能量药珠</div>
         <div class="anchor-overlay-stone">${r.stone}</div>
