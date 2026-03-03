@@ -94,6 +94,13 @@
       background: var(--bg); color: var(--muted); font-family: inherit;
       font-size: 14px; letter-spacing: .1em; cursor: pointer; transition: all .2s;
       display: flex; align-items: center; justify-content: center; gap: 6px;
+      -webkit-appearance: none; appearance: none; line-height: 1.35;
+    }
+    /* 符号与文字错位：Unicode ♂♀ 在宋体下会 fallback 到系统符号字体，基线不一致。用固定高度容器包住符号，与文字同一行对齐 */
+    .gender-btn .gender-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.35em; height: 1.35em; line-height: 0; font-size: 1em;
+      flex-shrink: 0;
     }
     .gender-btn.sel { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
     input[type=range] {
@@ -391,11 +398,11 @@
       <div class="f-label">性别 &nbsp;GENDER</div>
       <div style="display:flex;gap:10px;">
         <button class="gender-btn" id="btn-m" onclick="pickGender('m')">
-          <span aria-hidden="true">♂</span>
+          <span class="gender-icon" aria-hidden="true">♂</span>
           <span>男性</span>
         </button>
         <button class="gender-btn" id="btn-f" onclick="pickGender('f')">
-          <span aria-hidden="true">♀</span>
+          <span class="gender-icon" aria-hidden="true">♀</span>
           <span>女性</span>
         </button>
       </div>
